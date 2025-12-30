@@ -80,6 +80,50 @@ class XCallbackURLHandler:
         except subprocess.CalledProcessError:
             return False
 
+    @staticmethod
+    def build_show_url(view: str, name: str | None = None, filter_tags: list[str] | None = None) -> str:
+        """
+        Build a things:///show URL to navigate to a specific view in Things 3.
+
+        Args:
+            view: The view to show. Predefined list IDs: inbox, today, upcoming, anytime,
+                  someday, logbook, tomorrow, deadlines, repeating, all-projects.
+                  Or 'project'/'tag' to use the name parameter.
+            name: For 'project' or 'tag' views, the name of the item to show.
+            filter_tags: Optional list of tag names to filter the view.
+
+        Returns:
+            The constructed things:///show URL.
+        """
+        base_url = "things:///show"
+        params = {}
+
+        # Built-in list IDs that use the id parameter directly
+        builtin_list_ids = {
+            "inbox", "today", "upcoming", "anytime", "someday",
+            "logbook", "tomorrow", "deadlines", "repeating", "all-projects"
+        }
+
+        if view in builtin_list_ids:
+            # Direct list ID
+            params["id"] = view
+        elif view in ("project", "tag"):
+            # Use query parameter to find by name
+            if name:
+                params["query"] = name
+            else:
+                # Fall back to showing relevant list
+                params["id"] = "all-projects" if view == "project" else "anytime"
+        else:
+            # Treat unknown view as a direct ID (could be a UUID)
+            params["id"] = view
+
+        # Add tag filter if provided
+        if filter_tags:
+            params["filter"] = ",".join(filter_tags)
+
+        return XCallbackURLHandler.build_url(base_url, params)
+
 @server.list_tools()
 async def handle_list_tools() -> list[types.Tool]:
     """
@@ -168,7 +212,227 @@ async def handle_list_tools() -> list[types.Tool]:
                 },
                 "required": ["query"]
             },
-        )
+        ),
+        # ===========================================
+        # T013-T017: User Story 1 - View Tools
+        # ===========================================
+        types.Tool(
+            name="view-logbook",
+            description="View recently completed tasks from the Things3 logbook with completion dates",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of tasks to return (default: 50, max: 200)",
+                        "default": 50
+                    },
+                    "days": {
+                        "type": "integer",
+                        "description": "Only return tasks completed within this many days (default: 7)",
+                        "default": 7
+                    }
+                },
+                "additionalProperties": False
+            },
+        ),
+        types.Tool(
+            name="view-by-tag",
+            description="View all tasks with a specific tag across all lists and projects",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "tag": {
+                        "type": "string",
+                        "description": "The tag name to filter by (must exist in Things3)"
+                    },
+                    "include_completed": {
+                        "type": "boolean",
+                        "description": "Include completed tasks in results (default: false)",
+                        "default": False
+                    }
+                },
+                "required": ["tag"],
+                "additionalProperties": False
+            },
+        ),
+        types.Tool(
+            name="view-project-tasks",
+            description="View all tasks within a specific Things3 project",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "project_name": {
+                        "type": "string",
+                        "description": "The exact name of the project to view"
+                    }
+                },
+                "required": ["project_name"],
+                "additionalProperties": False
+            },
+        ),
+        types.Tool(
+            name="view-overdue",
+            description="View all tasks that have passed their deadline (due date before today)",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False
+            },
+        ),
+        # ===========================================
+        # T027-T029: User Story 2 - Statistics Tools
+        # ===========================================
+        types.Tool(
+            name="task-counts",
+            description="Get quick task count statistics across all Things3 lists (inbox, today, upcoming, anytime, someday, logbook)",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False
+            },
+        ),
+        types.Tool(
+            name="weekly-review",
+            description="Generate a comprehensive weekly review summary for GTD workflow including: overdue tasks, inbox staleness, completion stats, and someday items to review",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "days": {
+                        "type": "integer",
+                        "description": "Number of days to analyze for completion stats (default: 7)",
+                        "default": 7
+                    },
+                    "stale_days": {
+                        "type": "integer",
+                        "description": "Consider inbox items stale after this many days (default: 7)",
+                        "default": 7
+                    },
+                    "someday_review_days": {
+                        "type": "integer",
+                        "description": "Suggest reviewing someday items older than this many days (default: 30)",
+                        "default": 30
+                    }
+                },
+                "additionalProperties": False
+            },
+        ),
+        # ===========================================
+        # T031-T032: User Story 3 - Quick Add Tool
+        # ===========================================
+        types.Tool(
+            name="quick-add",
+            description="Ultra-simple task creation - quickly add a task to the inbox with just a title. For tasks with notes, deadlines, tags, or other metadata, use create-things3-todo instead.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "The task title (required)",
+                        "minLength": 1,
+                        "maxLength": 500
+                    }
+                },
+                "required": ["title"],
+                "additionalProperties": False
+            },
+        ),
+        # ===========================================
+        # T038-T040: User Story 4 - State Management Tools
+        # ===========================================
+        types.Tool(
+            name="cancel-todo",
+            description="Cancel/abandon a task by its title. If multiple tasks match, returns the matches for clarification.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "The title or partial title of the task to cancel"
+                    }
+                },
+                "required": ["title"],
+                "additionalProperties": False
+            },
+        ),
+        types.Tool(
+            name="reschedule-todo",
+            description="Reschedule a task to a new date. Supports natural language dates like 'tomorrow', 'next week', 'next monday', or YYYY-MM-DD format.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "The title or partial title of the task to reschedule"
+                    },
+                    "when": {
+                        "type": "string",
+                        "description": "New date: 'today', 'tomorrow', 'next week', 'next monday', 'someday', 'anytime', or 'YYYY-MM-DD'"
+                    }
+                },
+                "required": ["title", "when"],
+                "additionalProperties": False
+            },
+        ),
+        types.Tool(
+            name="bulk-complete",
+            description="Complete multiple tasks at once by their titles. Returns results for each task.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "titles": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of task titles to complete",
+                        "minItems": 1,
+                        "maxItems": 20
+                    }
+                },
+                "required": ["titles"],
+                "additionalProperties": False
+            },
+        ),
+        # ===========================================
+        # T045: User Story 5 - Navigation Tool
+        # ===========================================
+        types.Tool(
+            name="show-in-things",
+            description="Open Things 3 and navigate to a specific view, project, or tag. Useful for transitioning from AI conversation to the full Things 3 interface.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "view": {
+                        "type": "string",
+                        "description": "The view to open. Use list names for built-in views, or 'project'/'tag' for named items.",
+                        "enum": [
+                            "inbox",
+                            "today",
+                            "upcoming",
+                            "anytime",
+                            "someday",
+                            "logbook",
+                            "tomorrow",
+                            "deadlines",
+                            "repeating",
+                            "all-projects",
+                            "project",
+                            "tag"
+                        ]
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Required when view is 'project' or 'tag'. The name of the project or tag to open."
+                    },
+                    "filter_tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional: Filter the view by these tag names"
+                    }
+                },
+                "required": ["view"],
+                "additionalProperties": False
+            },
+        ),
     ]
 
 @server.call_tool()
@@ -428,6 +692,481 @@ async def handle_call_tool(
                     )
                 ]
 
+        # ===========================================
+        # T018-T022: User Story 1 - View Tool Handlers
+        # ===========================================
+
+        if name == "view-logbook":
+            if not AppleScriptHandler.validate_things3_access():
+                return [types.TextContent(type="text", text="Things3 is not available. Please ensure Things3 is installed and running.")]
+
+            try:
+                limit = (arguments or {}).get("limit", 50)
+                days = (arguments or {}).get("days", 7)
+
+                # Enforce limits
+                limit = min(max(1, limit), 200)
+                days = min(max(1, days), 365)
+
+                tasks = AppleScriptHandler.get_logbook_tasks(limit=limit, days=days)
+
+                if not tasks:
+                    return [types.TextContent(type="text", text=f"No completed tasks found in the last {days} days.")]
+
+                response = [f"Completed tasks (last {days} days, showing {len(tasks)}):"]
+                for task in tasks:
+                    title = task.get("title", "Untitled")
+                    completion = task.get("completion_date", "")
+                    project = task.get("project", "")
+                    line = f"\n✅ {title}"
+                    if completion:
+                        line += f" (Completed: {completion})"
+                    if project:
+                        line += f" [Project: {project}]"
+                    response.append(line)
+
+                return [types.TextContent(type="text", text="".join(response))]
+            except Exception as e:
+                logger.error(f"Error viewing logbook: {e}")
+                return [types.TextContent(type="text", text=f"Failed to retrieve logbook: {str(e)}")]
+
+        if name == "view-by-tag":
+            if not arguments or "tag" not in arguments:
+                return [types.TextContent(type="text", text="Missing required parameter: tag")]
+
+            if not AppleScriptHandler.validate_things3_access():
+                return [types.TextContent(type="text", text="Things3 is not available. Please ensure Things3 is installed and running.")]
+
+            try:
+                tag_name = arguments["tag"]
+                include_completed = arguments.get("include_completed", False)
+
+                tasks = AppleScriptHandler.get_tasks_by_tag(tag_name, include_completed)
+
+                if not tasks:
+                    return [types.TextContent(type="text", text=f"No tasks found with tag '{tag_name}'. Make sure the tag exists in Things3.")]
+
+                response = [f"Tasks tagged '{tag_name}' ({len(tasks)} found):"]
+                for task in tasks:
+                    title = task.get("title", "Untitled")
+                    status = task.get("status", "open")
+                    status_icon = "✅" if status == "completed" else "⏳"
+                    due_date = task.get("due_date", "")
+                    project = task.get("project", "")
+                    line = f"\n{status_icon} {title}"
+                    if due_date:
+                        line += f" (Due: {due_date})"
+                    if project:
+                        line += f" [Project: {project}]"
+                    response.append(line)
+
+                return [types.TextContent(type="text", text="".join(response))]
+            except Exception as e:
+                logger.error(f"Error viewing tasks by tag: {e}")
+                return [types.TextContent(type="text", text=f"Failed to retrieve tasks by tag: {str(e)}")]
+
+        if name == "view-project-tasks":
+            if not arguments or "project_name" not in arguments:
+                return [types.TextContent(type="text", text="Missing required parameter: project_name")]
+
+            if not AppleScriptHandler.validate_things3_access():
+                return [types.TextContent(type="text", text="Things3 is not available. Please ensure Things3 is installed and running.")]
+
+            try:
+                project_name = arguments["project_name"]
+                result = AppleScriptHandler.get_project_tasks(project_name)
+
+                if result.get("error"):
+                    return [types.TextContent(type="text", text=f"Project '{project_name}' not found. Check the exact project name in Things3.")]
+
+                tasks = result.get("tasks", [])
+                project_notes = result.get("notes", "")
+                project_deadline = result.get("deadline", "")
+
+                response = [f"Project: {project_name}"]
+                if project_deadline:
+                    response.append(f"\nDeadline: {project_deadline}")
+                if project_notes:
+                    response.append(f"\nNotes: {project_notes[:100]}{'...' if len(project_notes) > 100 else ''}")
+
+                response.append(f"\n\nTasks ({len(tasks)}):")
+
+                if not tasks:
+                    response.append("\n  No tasks in this project.")
+                else:
+                    for task in tasks:
+                        title = task.get("title", "Untitled")
+                        status = task.get("status", "open")
+                        status_icon = "✅" if status == "completed" else ("❌" if status == "canceled" else "⏳")
+                        due_date = task.get("due_date", "")
+                        line = f"\n  {status_icon} {title}"
+                        if due_date:
+                            line += f" (Due: {due_date})"
+                        response.append(line)
+
+                return [types.TextContent(type="text", text="".join(response))]
+            except Exception as e:
+                logger.error(f"Error viewing project tasks: {e}")
+                return [types.TextContent(type="text", text=f"Failed to retrieve project tasks: {str(e)}")]
+
+        if name == "view-overdue":
+            if not AppleScriptHandler.validate_things3_access():
+                return [types.TextContent(type="text", text="Things3 is not available. Please ensure Things3 is installed and running.")]
+
+            try:
+                tasks = AppleScriptHandler.get_overdue_tasks()
+
+                if not tasks:
+                    return [types.TextContent(type="text", text="No overdue tasks found. You're all caught up!")]
+
+                response = [f"⚠️ Overdue Tasks ({len(tasks)}):"]
+                for task in tasks:
+                    title = task.get("title", "Untitled")
+                    due_date = task.get("due_date", "")
+                    days_overdue = task.get("days_overdue", 0)
+                    project = task.get("project", "")
+                    line = f"\n🔴 {title} - {days_overdue} day{'s' if days_overdue != 1 else ''} overdue"
+                    if due_date:
+                        line += f" (Due: {due_date})"
+                    if project:
+                        line += f" [Project: {project}]"
+                    response.append(line)
+
+                return [types.TextContent(type="text", text="".join(response))]
+            except Exception as e:
+                logger.error(f"Error viewing overdue tasks: {e}")
+                return [types.TextContent(type="text", text=f"Failed to retrieve overdue tasks: {str(e)}")]
+
+        # ===========================================
+        # T028-T030: User Story 2 - Statistics Tool Handlers
+        # ===========================================
+
+        if name == "task-counts":
+            if not AppleScriptHandler.validate_things3_access():
+                return [types.TextContent(type="text", text="Things3 is not available. Please ensure Things3 is installed and running.")]
+
+            try:
+                counts = AppleScriptHandler.get_task_counts()
+
+                if not counts:
+                    return [types.TextContent(type="text", text="Failed to retrieve task counts.")]
+
+                response = ["📊 Task Counts:"]
+                response.append(f"\n  📥 Inbox: {counts.get('inbox', 0)}")
+                response.append(f"\n  📅 Today: {counts.get('today', 0)}")
+                response.append(f"\n  🔜 Upcoming: {counts.get('upcoming', 0)}")
+                response.append(f"\n  ⭐ Anytime: {counts.get('anytime', 0)}")
+                response.append(f"\n  💭 Someday: {counts.get('someday', 0)}")
+                response.append(f"\n  ✅ Logbook: {counts.get('logbook', 0)}")
+                response.append(f"\n\n  📋 Total Open: {counts.get('total_open', 0)}")
+
+                return [types.TextContent(type="text", text="".join(response))]
+            except Exception as e:
+                logger.error(f"Error getting task counts: {e}")
+                return [types.TextContent(type="text", text=f"Failed to get task counts: {str(e)}")]
+
+        if name == "weekly-review":
+            if not AppleScriptHandler.validate_things3_access():
+                return [types.TextContent(type="text", text="Things3 is not available. Please ensure Things3 is installed and running.")]
+
+            try:
+                days = (arguments or {}).get("days", 7)
+                stale_days = (arguments or {}).get("stale_days", 7)
+                someday_review_days = (arguments or {}).get("someday_review_days", 30)
+
+                # Gather all data
+                overdue_tasks = AppleScriptHandler.get_overdue_tasks()
+                inbox_tasks = AppleScriptHandler.get_inbox_with_ages()
+                completion_stats = AppleScriptHandler.get_completion_stats(days)
+                someday_tasks = AppleScriptHandler.get_someday_with_ages()
+                task_counts = AppleScriptHandler.get_task_counts()
+
+                # Calculate inbox staleness
+                stale_inbox = [t for t in inbox_tasks if t.get("age_days", 0) >= stale_days]
+                oldest_inbox_days = max([t.get("age_days", 0) for t in inbox_tasks], default=0)
+
+                # Filter someday items for review
+                someday_for_review = [t for t in someday_tasks if t.get("age_days", 0) >= someday_review_days]
+
+                # Build the weekly review report
+                from datetime import datetime
+                response = [f"📋 Weekly Review Summary"]
+                response.append(f"\nGenerated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+                response.append("\n" + "=" * 40)
+
+                # Overdue Section
+                response.append(f"\n\n⚠️ OVERDUE TASKS ({len(overdue_tasks)})")
+                if overdue_tasks:
+                    for task in overdue_tasks[:5]:  # Show top 5
+                        title = task.get("title", "Untitled")
+                        days_overdue = task.get("days_overdue", 0)
+                        response.append(f"\n  🔴 {title} ({days_overdue} day{'s' if days_overdue != 1 else ''} overdue)")
+                    if len(overdue_tasks) > 5:
+                        response.append(f"\n  ... and {len(overdue_tasks) - 5} more")
+                else:
+                    response.append("\n  ✅ None - you're caught up!")
+
+                # Inbox Section
+                response.append(f"\n\n📥 INBOX STATUS ({len(inbox_tasks)} items)")
+                response.append(f"\n  Total items: {len(inbox_tasks)}")
+                response.append(f"\n  Stale items (>{stale_days} days): {len(stale_inbox)}")
+                if oldest_inbox_days > 0:
+                    response.append(f"\n  Oldest item: {oldest_inbox_days} days")
+                if stale_inbox:
+                    response.append("\n  Stale items to process:")
+                    for task in stale_inbox[:3]:
+                        title = task.get("title", "Untitled")
+                        age = task.get("age_days", 0)
+                        response.append(f"\n    • {title} ({age} days)")
+                    if len(stale_inbox) > 3:
+                        response.append(f"\n    ... and {len(stale_inbox) - 3} more")
+
+                # Completion Stats
+                response.append(f"\n\n✅ COMPLETION STATS (last {days} days)")
+                response.append(f"\n  Completed this period: {completion_stats.get('completed_period', 0)}")
+                response.append(f"\n  Completed today: {completion_stats.get('completed_today', 0)}")
+
+                # Overall Counts
+                response.append(f"\n\n📊 CURRENT COUNTS")
+                response.append(f"\n  Today: {task_counts.get('today', 0)}")
+                response.append(f"\n  Upcoming: {task_counts.get('upcoming', 0)}")
+                response.append(f"\n  Anytime: {task_counts.get('anytime', 0)}")
+                response.append(f"\n  Total Open: {task_counts.get('total_open', 0)}")
+
+                # Someday Review
+                response.append(f"\n\n💭 SOMEDAY REVIEW ({len(someday_tasks)} total)")
+                if someday_for_review:
+                    response.append(f"\n  Items to review (>{someday_review_days} days old): {len(someday_for_review)}")
+                    for task in someday_for_review[:5]:
+                        title = task.get("title", "Untitled")
+                        age = task.get("age_days", 0)
+                        response.append(f"\n    • {title} ({age} days)")
+                    if len(someday_for_review) > 5:
+                        response.append(f"\n    ... and {len(someday_for_review) - 5} more")
+                else:
+                    response.append("\n  No items need review yet")
+
+                response.append("\n\n" + "=" * 40)
+                response.append("\n📌 Action Items:")
+                action_count = 0
+                if overdue_tasks:
+                    response.append(f"\n  1. Process {len(overdue_tasks)} overdue task{'s' if len(overdue_tasks) != 1 else ''}")
+                    action_count += 1
+                if stale_inbox:
+                    response.append(f"\n  {action_count + 1}. Clear {len(stale_inbox)} stale inbox item{'s' if len(stale_inbox) != 1 else ''}")
+                    action_count += 1
+                if someday_for_review:
+                    response.append(f"\n  {action_count + 1}. Review {len(someday_for_review)} old someday item{'s' if len(someday_for_review) != 1 else ''}")
+                if action_count == 0 and not someday_for_review:
+                    response.append("\n  ✅ Great job! No urgent actions needed.")
+
+                return [types.TextContent(type="text", text="".join(response))]
+            except Exception as e:
+                logger.error(f"Error generating weekly review: {e}")
+                return [types.TextContent(type="text", text=f"Failed to generate weekly review: {str(e)}")]
+
+        # ===========================================
+        # T033: User Story 3 - Quick Add Handler
+        # ===========================================
+
+        if name == "quick-add":
+            if not arguments or "title" not in arguments:
+                return [types.TextContent(type="text", text="Missing required parameter: title")]
+
+            if not XCallbackURLHandler.validate_things3_available():
+                return [types.TextContent(type="text", text="Things3 is not running or not installed. Please start Things3 and try again.")]
+
+            try:
+                title = arguments["title"].strip()
+                if not title:
+                    return [types.TextContent(type="text", text="Title cannot be empty.")]
+
+                # Build simple add URL - just title, goes to inbox
+                url = XCallbackURLHandler.build_url("things:///add", {"title": title})
+                logger.info(f"Quick-add task with URL: {url}")
+
+                XCallbackURLHandler.call_url(url)
+
+                return [types.TextContent(
+                    type="text",
+                    text=f"✅ Added to inbox: \"{title}\""
+                )]
+            except Exception as e:
+                logger.error(f"Error quick-adding task: {e}")
+                return [types.TextContent(type="text", text=f"Failed to add task: {str(e)}")]
+
+        # ===========================================
+        # T041-T043: User Story 4 - State Management Handlers
+        # ===========================================
+
+        if name == "cancel-todo":
+            if not arguments or "title" not in arguments:
+                return [types.TextContent(type="text", text="Missing required parameter: title")]
+
+            if not AppleScriptHandler.validate_things3_access():
+                return [types.TextContent(type="text", text="Things3 is not available. Please ensure Things3 is installed and running.")]
+
+            try:
+                title = arguments["title"]
+                result = AppleScriptHandler.cancel_todo_by_title(title)
+
+                if result["status"] == "success":
+                    return [types.TextContent(
+                        type="text",
+                        text=f"❌ Canceled: \"{result['title']}\""
+                    )]
+                elif result["status"] == "not_found":
+                    return [types.TextContent(type="text", text=result["message"])]
+                elif result["status"] == "ambiguous":
+                    matches = result.get("matches", [])
+                    response = [f"⚠️ {result['message']}"]
+                    response.append("\n\nMatching tasks:")
+                    for match in matches[:10]:
+                        match_title = match.get("title", "Untitled")
+                        project = match.get("project", "")
+                        line = f"\n  • {match_title}"
+                        if project:
+                            line += f" [Project: {project}]"
+                        response.append(line)
+                    response.append("\n\nPlease provide a more specific title.")
+                    return [types.TextContent(type="text", text="".join(response))]
+                else:
+                    return [types.TextContent(type="text", text=f"Error: {result.get('message', 'Unknown error')}")]
+            except Exception as e:
+                logger.error(f"Error canceling task: {e}")
+                return [types.TextContent(type="text", text=f"Failed to cancel task: {str(e)}")]
+
+        if name == "reschedule-todo":
+            if not arguments or "title" not in arguments or "when" not in arguments:
+                return [types.TextContent(type="text", text="Missing required parameters: title and when")]
+
+            if not AppleScriptHandler.validate_things3_access():
+                return [types.TextContent(type="text", text="Things3 is not available. Please ensure Things3 is installed and running.")]
+
+            try:
+                title = arguments["title"]
+                when = arguments["when"]
+                result = AppleScriptHandler.reschedule_todo_by_title(title, when)
+
+                if result["status"] == "success":
+                    return [types.TextContent(
+                        type="text",
+                        text=f"📅 Rescheduled \"{result['title']}\" to {result['scheduled_to']}"
+                    )]
+                elif result["status"] == "not_found":
+                    return [types.TextContent(type="text", text=result["message"])]
+                elif result["status"] == "ambiguous":
+                    matches = result.get("matches", [])
+                    response = [f"⚠️ {result['message']}"]
+                    response.append("\n\nMatching tasks:")
+                    for match in matches[:10]:
+                        match_title = match.get("title", "Untitled")
+                        project = match.get("project", "")
+                        line = f"\n  • {match_title}"
+                        if project:
+                            line += f" [Project: {project}]"
+                        response.append(line)
+                    response.append("\n\nPlease provide a more specific title.")
+                    return [types.TextContent(type="text", text="".join(response))]
+                else:
+                    return [types.TextContent(type="text", text=f"Error: {result.get('message', 'Unknown error')}")]
+            except Exception as e:
+                logger.error(f"Error rescheduling task: {e}")
+                return [types.TextContent(type="text", text=f"Failed to reschedule task: {str(e)}")]
+
+        if name == "bulk-complete":
+            if not arguments or "titles" not in arguments:
+                return [types.TextContent(type="text", text="Missing required parameter: titles")]
+
+            if not AppleScriptHandler.validate_things3_access():
+                return [types.TextContent(type="text", text="Things3 is not available. Please ensure Things3 is installed and running.")]
+
+            try:
+                titles = arguments["titles"]
+                if not titles:
+                    return [types.TextContent(type="text", text="No task titles provided.")]
+
+                result = AppleScriptHandler.bulk_complete_todos(titles)
+
+                response = [f"📋 Bulk Complete Results:"]
+                response.append(f"\n  Requested: {result['requested']}")
+                response.append(f"\n  Succeeded: {result['succeeded']}")
+                response.append(f"\n  Failed: {result['failed']}")
+                response.append("\n\nDetails:")
+
+                for item in result.get("results", []):
+                    title = item.get("title", "Unknown")
+                    status = item.get("status", "unknown")
+                    if status == "success":
+                        response.append(f"\n  ✅ {title}")
+                    elif status == "ambiguous":
+                        response.append(f"\n  ⚠️ {title} - multiple matches found")
+                    elif status == "not_found":
+                        response.append(f"\n  ❓ {title} - not found")
+                    else:
+                        error = item.get("error", "Unknown error")
+                        response.append(f"\n  ❌ {title} - {error}")
+
+                return [types.TextContent(type="text", text="".join(response))]
+            except Exception as e:
+                logger.error(f"Error bulk completing tasks: {e}")
+                return [types.TextContent(type="text", text=f"Failed to bulk complete tasks: {str(e)}")]
+
+        # ===========================================
+        # T046: User Story 5 - Navigation Handler
+        # ===========================================
+
+        if name == "show-in-things":
+            if not arguments or "view" not in arguments:
+                return [types.TextContent(type="text", text="Missing required parameter: view")]
+
+            try:
+                view = arguments["view"]
+                item_name = arguments.get("name")
+                filter_tags = arguments.get("filter_tags")
+
+                # Validate that name is provided for project/tag views
+                if view in ("project", "tag") and not item_name:
+                    return [types.TextContent(
+                        type="text",
+                        text=f"When view is '{view}', you must provide a 'name' parameter."
+                    )]
+
+                # Build the show URL
+                url = XCallbackURLHandler.build_show_url(view, item_name, filter_tags)
+                logger.info(f"Opening Things 3 with URL: {url}")
+
+                # Execute the URL to open Things 3
+                XCallbackURLHandler.call_url(url)
+
+                # Build response message
+                if view in ("project", "tag"):
+                    opened_desc = f"{view.capitalize()}: {item_name}"
+                else:
+                    # Map view IDs to human-readable names
+                    view_names = {
+                        "inbox": "Inbox",
+                        "today": "Today",
+                        "upcoming": "Upcoming",
+                        "anytime": "Anytime",
+                        "someday": "Someday",
+                        "logbook": "Logbook",
+                        "tomorrow": "Tomorrow",
+                        "deadlines": "Deadlines",
+                        "repeating": "Repeating Tasks",
+                        "all-projects": "All Projects"
+                    }
+                    opened_desc = view_names.get(view, view.replace("-", " ").title())
+
+                message = f"📱 Opened Things 3 to: {opened_desc}"
+                if filter_tags:
+                    message += f" (filtered by: {', '.join(filter_tags)})"
+
+                return [types.TextContent(type="text", text=message)]
+            except Exception as e:
+                logger.error(f"Error showing Things 3 view: {e}")
+                return [types.TextContent(type="text", text=f"Failed to open Things 3: {str(e)}")]
+
         raise ValueError(f"Unknown tool: {name}")
 
     except Exception as e:
@@ -455,7 +1194,7 @@ async def main():
                 write_stream,
                 InitializationOptions(
                     server_name="mcp-server-things3",
-                    server_version="0.1.0",
+                    server_version="0.2.0",
                     capabilities=server.get_capabilities(
                         notification_options=NotificationOptions(),
                         experimental_capabilities={},
@@ -469,5 +1208,10 @@ async def main():
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
-if __name__ == "__main__":
+def run():
+    """Entry point for the CLI command."""
     asyncio.run(main())
+
+
+if __name__ == "__main__":
+    run()
