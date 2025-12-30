@@ -257,21 +257,6 @@ async def handle_list_tools() -> list[types.Tool]:
             },
         ),
         types.Tool(
-            name="view-project-tasks",
-            description="View all tasks within a specific Things3 project",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "project_name": {
-                        "type": "string",
-                        "description": "The exact name of the project to view"
-                    }
-                },
-                "required": ["project_name"],
-                "additionalProperties": False
-            },
-        ),
-        types.Tool(
             name="view-overdue",
             description="View all tasks that have passed their deadline (due date before today)",
             inputSchema={
@@ -413,7 +398,6 @@ async def handle_list_tools() -> list[types.Tool]:
                             "logbook",
                             "tomorrow",
                             "deadlines",
-                            "repeating",
                             "all-projects",
                             "project",
                             "tag"
@@ -765,50 +749,6 @@ async def handle_call_tool(
                 logger.error(f"Error viewing tasks by tag: {e}")
                 return [types.TextContent(type="text", text=f"Failed to retrieve tasks by tag: {str(e)}")]
 
-        if name == "view-project-tasks":
-            if not arguments or "project_name" not in arguments:
-                return [types.TextContent(type="text", text="Missing required parameter: project_name")]
-
-            if not AppleScriptHandler.validate_things3_access():
-                return [types.TextContent(type="text", text="Things3 is not available. Please ensure Things3 is installed and running.")]
-
-            try:
-                project_name = arguments["project_name"]
-                result = AppleScriptHandler.get_project_tasks(project_name)
-
-                if result.get("error"):
-                    return [types.TextContent(type="text", text=f"Project '{project_name}' not found. Check the exact project name in Things3.")]
-
-                tasks = result.get("tasks", [])
-                project_notes = result.get("notes", "")
-                project_deadline = result.get("deadline", "")
-
-                response = [f"Project: {project_name}"]
-                if project_deadline:
-                    response.append(f"\nDeadline: {project_deadline}")
-                if project_notes:
-                    response.append(f"\nNotes: {project_notes[:100]}{'...' if len(project_notes) > 100 else ''}")
-
-                response.append(f"\n\nTasks ({len(tasks)}):")
-
-                if not tasks:
-                    response.append("\n  No tasks in this project.")
-                else:
-                    for task in tasks:
-                        title = task.get("title", "Untitled")
-                        status = task.get("status", "open")
-                        status_icon = "✅" if status == "completed" else ("❌" if status == "canceled" else "⏳")
-                        due_date = task.get("due_date", "")
-                        line = f"\n  {status_icon} {title}"
-                        if due_date:
-                            line += f" (Due: {due_date})"
-                        response.append(line)
-
-                return [types.TextContent(type="text", text="".join(response))]
-            except Exception as e:
-                logger.error(f"Error viewing project tasks: {e}")
-                return [types.TextContent(type="text", text=f"Failed to retrieve project tasks: {str(e)}")]
-
         if name == "view-overdue":
             if not AppleScriptHandler.validate_things3_access():
                 return [types.TextContent(type="text", text="Things3 is not available. Please ensure Things3 is installed and running.")]
@@ -1153,7 +1093,6 @@ async def handle_call_tool(
                         "logbook": "Logbook",
                         "tomorrow": "Tomorrow",
                         "deadlines": "Deadlines",
-                        "repeating": "Repeating Tasks",
                         "all-projects": "All Projects"
                     }
                     opened_desc = view_names.get(view, view.replace("-", " ").title())

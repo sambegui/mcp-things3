@@ -15,9 +15,7 @@ A robust MCP (Model Context Protocol) server providing comprehensive integration
 ### Advanced Viewing (NEW)
 - **View Logbook**: See recently completed tasks with completion dates
 - **View by Tag**: Filter tasks across all lists by specific tags
-- **View Project Tasks**: See all tasks within a specific project
 - **View Overdue**: Identify tasks that have passed their deadline
-- **View Repeating**: List all recurring/repeating tasks
 
 ### Statistics & Review (NEW)
 - **Task Counts**: Get quick counts across all Things3 lists
@@ -182,27 +180,10 @@ View all tasks with a specific tag across all lists.
 }
 ```
 
-#### `view-project-tasks`
-View all tasks within a specific project.
-- **Required**: `project_name` (string) - Exact name of the project
-- **Returns**: Project metadata and list of all tasks in the project
-
-**Example**:
-```json
-{
-  "project_name": "Website Redesign"
-}
-```
-
 #### `view-overdue`
 View all tasks that have passed their deadline.
 - **Parameters**: None
 - **Returns**: List of overdue tasks with days overdue count
-
-#### `view-repeating`
-View all recurring/repeating tasks.
-- **Parameters**: None
-- **Returns**: List of repeating tasks (note: repeat frequency is not accessible via automation)
 
 ### Statistics Operations (NEW)
 
@@ -287,7 +268,7 @@ Complete multiple tasks at once.
 
 #### `show-in-things`
 Open Things3 and navigate to a specific view, project, or tag.
-- **Required**: `view` (string) - One of: inbox, today, upcoming, anytime, someday, logbook, tomorrow, deadlines, repeating, all-projects, project, tag
+- **Required**: `view` (string) - One of: inbox, today, upcoming, anytime, someday, logbook, tomorrow, deadlines, all-projects, project, tag
 - **Optional**:
   - `name` (string) - Required when view is 'project' or 'tag'
   - `filter_tags` (array of strings) - Filter the view by these tags
@@ -438,9 +419,14 @@ MIT License - see LICENSE file for details.
 
 ## Changelog
 
+### v0.2.1 (Bug Fixes)
+- **Fixed**: reschedule-todo now uses correct AppleScript `schedule` command for date-based scheduling
+- **Removed**: view-project-tasks (AppleScript project lookup unreliable)
+- **Removed**: view-repeating option from show-in-things (not supported by Things3 URL scheme)
+
 ### v0.2.0 (Enhanced)
-- **12 New Tools** for comprehensive Things3 integration
-- **Advanced Viewing**: view-logbook, view-by-tag, view-project-tasks, view-overdue, view-repeating
+- **10 New Tools** for comprehensive Things3 integration
+- **Advanced Viewing**: view-logbook, view-by-tag, view-overdue
 - **Statistics & GTD**: task-counts, weekly-review for GTD workflow support
 - **Quick Operations**: quick-add for fast task capture
 - **State Management**: cancel-todo, reschedule-todo, bulk-complete with ambiguous match handling

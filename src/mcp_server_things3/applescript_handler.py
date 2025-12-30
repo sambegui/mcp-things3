@@ -896,22 +896,53 @@ class AppleScriptHandler:
                 "message": f"Could not parse date: '{new_when}'. Try formats like 'tomorrow', 'next monday', 'next week', or 'YYYY-MM-DD'"
             }
 
-        # Map special keywords to AppleScript-friendly values
         when_value = parsed_date
 
-        # For date-specific scheduling, we use list-based approach
-        # Things 3 AppleScript doesn't support setting activation date directly
-        # Map dates to appropriate lists
-        list_mapping = {
-            "today": "Today",
-            "tomorrow": "Upcoming",  # Move to Upcoming, it will appear tomorrow
+        # Determine if we need to use 'schedule' command (for dates) or 'move' (for special lists)
+        # Special lists that use 'move to list' command
+        special_lists = {
             "someday": "Someday",
             "anytime": "Anytime",
-            "evening": "Today",
-            "next week": "Upcoming",
         }
 
-        target_list = list_mapping.get(when_value.lower(), "Upcoming")
+        # Check if this is a special list (use move) or a date (use schedule)
+        use_move_command = when_value.lower() in special_lists
+
+        if use_move_command:
+            target_list = special_lists[when_value.lower()]
+            schedule_part = f'move t to list "{target_list}"'
+        elif when_value.lower() == "today":
+            # For today, move to Today list
+            schedule_part = 'move t to list "Today"'
+        elif when_value.lower() == "evening":
+            # For evening, move to Today list (Things handles evening internally)
+            schedule_part = 'move t to list "Today"'
+        elif when_value.lower() == "tomorrow":
+            # Use schedule command for tomorrow
+            schedule_part = 'schedule t for (current date) + 1 * days'
+        elif when_value.lower() == "next week":
+            # Use schedule command for next week (7 days)
+            schedule_part = 'schedule t for (current date) + 7 * days'
+        else:
+            # For specific dates (YYYY-MM-DD), calculate days from now and use schedule
+            try:
+                target_date = datetime.strptime(when_value, "%Y-%m-%d").date()
+                today = datetime.now().date()
+                days_diff = (target_date - today).days
+                if days_diff < 0:
+                    return {
+                        "status": "error",
+                        "message": f"Cannot schedule to a past date: {when_value}"
+                    }
+                elif days_diff == 0:
+                    schedule_part = 'move t to list "Today"'
+                else:
+                    schedule_part = f'schedule t for (current date) + {days_diff} * days'
+            except ValueError:
+                return {
+                    "status": "error",
+                    "message": f"Invalid date format: {when_value}"
+                }
 
         script = f'''
         tell application "Things3"
@@ -940,8 +971,8 @@ class AppleScriptHandler:
                 set targetTitle to title of item 1 of foundTodos
                 repeat with t in to dos
                     if id of t = targetId then
-                        -- Move to the target list
-                        move t to list "{target_list}"
+                        -- Reschedule the task
+                        {schedule_part}
                         return "RESCHEDULED:" & targetTitle & "|{when_value}"
                     end if
                 end repeat
