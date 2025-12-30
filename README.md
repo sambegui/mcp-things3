@@ -106,8 +106,8 @@ Creates a new to-do in Things3 with optional reminder time.
   - `notes` (string)
   - `when` (string) - Schedule date with optional reminder time:
     - Keywords: `today`, `tomorrow`, `evening`, `anytime`, `someday`
-    - With time: `today@10am`, `tomorrow@2:30pm`, `evening@6pm`
-    - Specific date: `2025-01-15` or `2025-01-15@9am`
+    - With time: `today at 10am`, `tomorrow at 2:30pm`
+    - Specific date: `2025-01-15` or `2025-01-15 at 9am`
   - `deadline` (string) - Due date (YYYY-MM-DD)
   - `checklist` (array of strings)
   - `tags` (array of strings)
@@ -118,7 +118,7 @@ Creates a new to-do in Things3 with optional reminder time.
 ```json
 {
   "title": "Morning standup",
-  "when": "tomorrow@9:30am",
+  "when": "tomorrow at 9:30am",
   "list": "Work"
 }
 ```

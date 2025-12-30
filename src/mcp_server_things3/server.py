@@ -40,7 +40,9 @@ class XCallbackURLHandler:
                 if isinstance(value, list):
                     value = ",".join(str(v) for v in value)
                 # Use quote() instead of quote_plus() - Things3 prefers %20 over +
-                encoded_params.append(f"{key}={quote(str(value), safe='')}")
+                # Preserve '@' for time specifications (e.g., 'today@10am')
+                # Preserve ':' for time formats (e.g., '2:30pm')
+                encoded_params.append(f"{key}={quote(str(value), safe='@:')}")
         
         return f"{base_url}?{'&'.join(encoded_params)}"
 
@@ -181,7 +183,7 @@ async def handle_list_tools() -> list[types.Tool]:
                 "properties": {
                     "title": {"type": "string", "description": "The title of the to-do"},
                     "notes": {"type": "string", "description": "Notes for the to-do"},
-                    "when": {"type": "string", "description": "When to schedule: 'today', 'tomorrow', 'evening', 'anytime', 'someday', or date string. Add @TIME for reminder (e.g., 'today@10am', 'tomorrow@2:30pm', '2025-01-15@9am')"},
+                    "when": {"type": "string", "description": "When to schedule: 'today', 'tomorrow', 'evening', 'anytime', 'someday', or date string. Add 'at TIME' for reminder (e.g., 'today at 10am', 'tomorrow at 2:30pm', '2025-01-15 at 9am')"},
                     "deadline": {"type": "string", "description": "Due date in YYYY-MM-DD format"},
                     "checklist": {"type": "array", "items": {"type": "string"}, "description": "Checklist items"},
                     "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags to apply"},
