@@ -175,18 +175,18 @@ async def handle_list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="create-things3-todo",
-            description="Create a new to-do in Things3",
+            description="Create a new to-do in Things3 with optional reminder time",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "title": {"type": "string"},
-                    "notes": {"type": "string"},
-                    "when": {"type": "string"},
-                    "deadline": {"type": "string"},
-                    "checklist": {"type": "array", "items": {"type": "string"}},
-                    "tags": {"type": "array", "items": {"type": "string"}},
-                    "list": {"type": "string"},
-                    "heading": {"type": "string"},
+                    "title": {"type": "string", "description": "The title of the to-do"},
+                    "notes": {"type": "string", "description": "Notes for the to-do"},
+                    "when": {"type": "string", "description": "When to schedule: 'today', 'tomorrow', 'evening', 'anytime', 'someday', or date string. Add @TIME for reminder (e.g., 'today@10am', 'tomorrow@2:30pm', '2025-01-15@9am')"},
+                    "deadline": {"type": "string", "description": "Due date in YYYY-MM-DD format"},
+                    "checklist": {"type": "array", "items": {"type": "string"}, "description": "Checklist items"},
+                    "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags to apply"},
+                    "list": {"type": "string", "description": "Project or area to add to"},
+                    "heading": {"type": "string", "description": "Heading within a project"},
                 },
                 "required": ["title"]
             },

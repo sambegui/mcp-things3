@@ -100,23 +100,34 @@ Creates a new project in Things3.
 ```
 
 #### `create-things3-todo`
-Creates a new to-do in Things3.
+Creates a new to-do in Things3 with optional reminder time.
 - **Required**: `title` (string)
 - **Optional**:
   - `notes` (string)
-  - `when` (string) - Date/time to start  
-  - `deadline` (string) - Due date
+  - `when` (string) - Schedule date with optional reminder time:
+    - Keywords: `today`, `tomorrow`, `evening`, `anytime`, `someday`
+    - With time: `today@10am`, `tomorrow@2:30pm`, `evening@6pm`
+    - Specific date: `2025-01-15` or `2025-01-15@9am`
+  - `deadline` (string) - Due date (YYYY-MM-DD)
   - `checklist` (array of strings)
   - `tags` (array of strings)
   - `list` (string) - Project or area to assign to
   - `heading` (string) - Group under this heading
 
-**Example**:
+**Examples**:
+```json
+{
+  "title": "Morning standup",
+  "when": "tomorrow@9:30am",
+  "list": "Work"
+}
+```
+
 ```json
 {
   "title": "Review design mockups",
   "notes": "Check the new homepage designs",
-  "list": "Website Redesign", 
+  "list": "Website Redesign",
   "deadline": "2024-02-20",
   "tags": ["review"],
   "checklist": ["Check mobile responsiveness", "Verify brand guidelines", "Test accessibility"]
